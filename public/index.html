@@ -1,23 +1,116 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>📖 Linux Learning Journal</title>
+  <style>
+    /* তোমার আগের CSS 그대로 */
+  </style>
+</head>
+<body>
+  <h1>📖 Linux Learning Journal</h1>
+  <div class="tabs">
+    <button class="tab active" onclick="openSection(1)">Section 1: Vocabulary</button>
+    <button class="tab" onclick="openSection(2)">Section 2: Command Syntax</button>
+    <button class="tab" onclick="openSection(3)">Section 3: Special Characters</button>
+  </div>
+  <div class="content-wrapper">
+    <div id="section1" class="content">
+      <h2>Vocabulary</h2>
+      <div class="editable">
+        <p>Distro: Linux distribution</p>
+        <p>Kernel: Core of the OS</p>
+        <p>Shell: Command interpreter</p>
+      </div>
+    </div>
+    <div id="section2" class="content" style="display:none;">
+      <h2>Command Syntax</h2>
+      <div class="editable"><p><br></p></div>
+    </div>
+    <div id="section3" class="content" style="display:none;">
+      <h2>Special Characters</h2>
+      <div class="editable"><p>Content for Special Characters will appear here...</p></div>
+    </div>
+  </div>
+  <div class="buttons">
+    <button class="edit" onclick="toggleEdit()">Edit</button>
+    <button class="save" onclick="saveChanges()">Save</button>
+    <button class="undo" onclick="performUndo()">↺</button>
+    <button class="redo" onclick="performRedo()">↻</button>
+  </div>
 
-const app = express();
-const PORT = 3000;
+  <script>
+    let currentSection = 1;
+    let isEditing = false;
 
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+    function openSection(sectionNum) {
+      if (isEditing) { alert('Please save or cancel editing first.'); return; }
+      document.querySelectorAll('.content').forEach(el => el.style.display = 'none');
+      document.getElementById(`section${sectionNum}`).style.display = 'block';
+      document.querySelectorAll('.tab').forEach((tab, index) => {
+        tab.classList.toggle('active', index + 1 === sectionNum);
+      });
+      currentSection = sectionNum;
+    }
 
-app.post('/api/save', (req, res) => {
-  const { section, html, selection } = req.body;
-  const entry = `\n--- Section ${section} ---\n${html}\nSelection: ${JSON.stringify(selection)}\n`;
+    function getCurrentContent() {
+      return document.getElementById(`section${currentSection}`).querySelector('.editable');
+    }
 
-  fs.appendFile(path.join(__dirname, 'journal.txt'), entry, (err) => {
-    if (err) return res.status(500).json({ message: 'Failed to save' });
-    res.json({ message: 'Saved successfully!' });
-  });
-});
+    function saveSelection(containerEl) {
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        const preSelectionRange = range.cloneRange();
+        preSelectionRange.selectNodeContents(containerEl);
+        preSelectionRange.setEnd(range.startContainer, range.startOffset);
+        const start = preSelectionRange.toString().length;
+        return { start, end: start + range.toString().length };
+      }
+      return { start: 0, end: 0 };
+    }
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+    function toggleEdit() {
+      const content = getCurrentContent();
+      isEditing = !isEditing;
+      content.contentEditable = isEditing;
+      document.querySelector('.edit').textContent = isEditing ? 'Editing...' : 'Edit';
+      if (isEditing) content.focus();
+    }
+
+    function saveChanges() {
+      if (!isEditing) return;
+      const content = getCurrentContent();
+      const savedSel = saveSelection(content);
+
+      content.contentEditable = false;
+      isEditing = false;
+      document.querySelector('.edit').textContent = 'Edit';
+
+      // Send to backend
+      fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          section: currentSection,
+          html: content.innerHTML,
+          selection: savedSel
+        })
+      })
+      .then(res => res.json())
+      .then(data => alert(data.message))
+      .catch(err => alert('Error saving: ' + err));
+    }
+
+    function performUndo() {
+      if (!isEditing) { alert('Enter edit mode first.'); return; }
+      document.execCommand('undo');
+    }
+
+    function performRedo() {
+      if (!isEditing) { alert('Enter edit mode first.'); return; }
+      document.execCommand('redo');
+    }
+  </script>
+</body>
+</html>
