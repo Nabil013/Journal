@@ -1,194 +1,23 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📖 Linux Learning Journal</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-            margin: 20px;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .tabs {
-            display: flex;
-            margin-bottom: 20px;
-        }
-        .tab {
-            padding: 10px 20px;
-            border: none;
-            background-color: #ddd;
-            cursor: pointer;
-            margin-right: 5px;
-            border-radius: 5px 5px 0 0;
-        }
-        .tab.active {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .content {
-            background-color: white;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            position: relative;
-            min-height: 200px;
-        }
-        .buttons {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .buttons button {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .buttons button.edit {
-            background-color: #2196F3;
-            color: white;
-        }
-        .buttons button.save {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .buttons button.undo, .buttons button.redo {
-            background-color: #f0f0f0;
-            font-size: 18px;
-            width: 36px;
-            height: 36px;
-            padding: 0;
-        }
-    </style>
-</head>
-<body>
-    <h1>📖 Linux Learning Journal</h1>
-    <div class="tabs">
-        <button class="tab active" onclick="openSection(1)">Section 1: Vocabulary</button>
-        <button class="tab" onclick="openSection(2)">Section 2: Command Syntax</button>
-        <button class="tab" onclick="openSection(3)">Section 3: Special Characters</button>
-    </div>
-    <div class="content-wrapper">
-        <div id="section1" class="content">
-            <h2>Vocabulary</h2>
-            <div class="editable">
-                <p>Distro: Linux distribution</p>
-                <p>Kernel: Core of the OS</p>
-                <p>Shell: Command interpreter</p>
-            </div>
-        </div>
-        <div id="section2" class="content" style="display: none;">
-            <h2>Command Syntax</h2>
-            <div class="editable">
-                <p><br></p>
-            </div>
-        </div>
-        <div id="section3" class="content" style="display: none;">
-            <h2>Special Characters</h2>
-            <div class="editable">
-                <p>Content for Special Characters will appear here...</p>
-            </div>
-        </div>
-    </div>
-    <div class="buttons">
-        <button class="edit" onclick="toggleEdit()">Edit</button>
-        <button class="save" onclick="saveChanges()">Save</button>
-        <button class="undo" onclick="performUndo()">↺</button>
-        <button class="redo" onclick="performRedo()">↻</button>
-    </div>
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
 
-    <script>
-        let currentSection = 1;
-        let isEditing = false;
+const app = express();
+const PORT = 3000;
 
-        function openSection(sectionNum) {
-            if (isEditing) {
-                alert('Please save or cancel editing before switching sections.');
-                return;
-            }
-            document.querySelectorAll('.content').forEach(el => el.style.display = 'none');
-            document.getElementById(`section${sectionNum}`).style.display = 'block';
-            document.querySelectorAll('.tab').forEach((tab, index) => {
-                tab.classList.toggle('active', index + 1 === sectionNum);
-            });
-            currentSection = sectionNum;
-        }
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-        function getCurrentContent() {
-            return document.getElementById(`section${currentSection}`).querySelector('.editable');
-        }
+app.post('/api/save', (req, res) => {
+  const { section, html, selection } = req.body;
+  const entry = `\n--- Section ${section} ---\n${html}\nSelection: ${JSON.stringify(selection)}\n`;
 
-        function saveSelection(containerEl) {
-            const sel = window.getSelection();
-            if (sel.rangeCount > 0) {
-                const range = sel.getRangeAt(0);
-                const preSelectionRange = range.cloneRange();
-                preSelectionRange.selectNodeContents(containerEl);
-                preSelectionRange.setEnd(range.startContainer, range.startOffset);
-                const start = preSelectionRange.toString().length;
-                return {
-                    start: start,
-                    end: start + range.toString().length
-                };
-            }
-            return { start: 0, end: 0 };
-        }
+  fs.appendFile(path.join(__dirname, 'journal.txt'), entry, (err) => {
+    if (err) return res.status(500).json({ message: 'Failed to save' });
+    res.json({ message: 'Saved successfully!' });
+  });
+});
 
-        function toggleEdit() {
-            const content = getCurrentContent();
-            isEditing = !isEditing;
-            content.contentEditable = isEditing;
-            const editButton = document.querySelector('.edit');
-            editButton.textContent = isEditing ? 'Editing...' : 'Edit';
-            if (isEditing) content.focus();
-        }
-
-        function saveChanges() {
-            if (!isEditing) return;
-            const content = getCurrentContent();
-            const savedSel = saveSelection(content);
-
-            content.contentEditable = false;
-            isEditing = false;
-            document.querySelector('.edit').textContent = 'Edit';
-
-            // Send to Vercel serverless function
-            fetch('/api/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    section: currentSection,
-                    html: content.innerHTML,
-                    selection: savedSel
-                })
-            })
-            .then(res => res.json())
-            .then(data => alert(data.message))
-            .catch(err => alert('Error saving: ' + err));
-        }
-
-        function performUndo() {
-            if (!isEditing) {
-                alert('Enter edit mode first to use undo.');
-                return;
-            }
-            document.execCommand('undo');
-        }
-
-        function performRedo() {
-            if (!isEditing) {
-                alert('Enter edit mode first to use redo.');
-                return;
-            }
-            document.execCommand('redo');
-        }
-    </script>
-</body>
-  </html>
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
